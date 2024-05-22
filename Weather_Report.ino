@@ -1,8 +1,8 @@
 //==============Blynk Definition==============
 #define BLYNK_PRINT Serial
-//#define BLYNK_TEMPLATE_ID "Blynk template ID"
-//#define BLYNK_TEMPLATE_NAME "Blynk template name"
-//#define BLYNK_AUTH_TOKEN "Blynk authorization token"
+#define BLYNK_TEMPLATE_ID "TMPL4E5hG8al3"
+#define BLYNK_TEMPLATE_NAME "temp hum data"
+#define BLYNK_AUTH_TOKEN "1BZVil77wMbp60U2J5QUff9Lo8_Xgc2k"
 //=================Libraries===================
 #include <WiFi.h>
 #include <Adafruit_BME280.h>
@@ -10,96 +10,87 @@
 #include <Wire.h>
 #include <BlynkSimpleEsp32.h>
 #include <LCD-I2C.h>
+#include <NTPClient.h>
+#include <WiFiUdp.h>
 //=================LCD Display=================
 LCD_I2C lcd(0x27, 16, 2);
 //=====================BME=====================
 Adafruit_BME280 bme;
 #define BME280_I2C_ADDRESS 0x77
 //====================WIFI=====================
-//const char* ssid     = "name of network";
-//const char* password = "password of network";
-//const char* auth     = "Blynk Template ID";
+const char* ssid     = "Na Tinki Tamagochito";
+const char* password = "244466666";
+const char* auth     = "1BZVil77wMbp60U2J5QUff9Lo8_Xgc2k";
 //===================Interval==================
 const unsigned long BLYNK_INTERVAL = 1000;
 const unsigned long SERIAL_INTERVAL = 10000;
-const unsigned long LCD_INTERVAL = 5000;
-//=============================================
+const unsigned long LCD_INTERVAL = 8000;
+//================NTP Client===================
+WiFiUDP ntpUDP;
+NTPClient timeClient(ntpUDP, "pool.ntp.org", 10800);
+//===================Timers====================
 BlynkTimer timer;
+//==================Time Variables=============
+unsigned long currentTime = 0;
+unsigned long lastUpdate = 0;
 //=============================================
-  void setup() {
-    Serial.begin(115200);
-    delay(2000);
-
-    Wire.begin(11,10);
-
-    bme.begin(BME280_I2C_ADDRESS);
-
-    Blynk.begin(auth, ssid, password);
-    timer.setInterval(BLYNK_INTERVAL, sendSensor);
-
-    lcd.begin();
-    lcd.display();
-    lcd.backlight();
-    lcd.print("Initializing...");
-
-    Serial.print("Connecting to ");
-    Serial.println(ssid);
-    WiFi.mode(WIFI_STA);
-    WiFi.begin(ssid, password);
-  
-    while (WiFi.status() != WL_CONNECTED) {
-      delay(500);
-      Serial.print(".");
-    }
-    randomSeed(micros());
-    Serial.println("\nWiFi connected\nIP address: ");
-    Serial.println(WiFi.localIP());
-    delay(1000);
+void setup() {
+  Serial.begin(115200);
+  delay(2000);
+ 
+  Wire.begin(11, 10);
+ 
+  bme.begin(BME280_I2C_ADDRESS);
+ 
+  Blynk.begin(BLYNK_AUTH_TOKEN, ssid, password);
+  timer.setInterval(BLYNK_INTERVAL, sendSensor);
+  timer.setInterval(60000, checkWeatherWarning); // check weather warning every minute
+  timer.setInterval(1000, incrementTime); // increment time every second
+  timer.setInterval(LCD_INTERVAL, updateDisplay); // update LCD display every interval
+ 
+  lcd.begin();
+  lcd.display();
+  lcd.backlight();
+  lcd.print("Initializing...");
+ 
+  Serial.print("Connecting to ");
+  Serial.println(ssid);
+  WiFi.mode(WIFI_STA);
+  WiFi.begin(ssid, password);
+ 
+  while (WiFi.status() != WL_CONNECTED) {
+    delay(500);
+    Serial.print(".");
+  }
+  randomSeed(micros());
+  Serial.println("\nWiFi connected\nIP address: ");
+  Serial.println(WiFi.localIP());
+  delay(1000);
+ 
+  timeClient.begin();
+ 
+  // Update the clock initially
+  updateClockFromNTP();
 }
+ 
 void loop() {
-  static unsigned long previousBlynkTime = 0;
-  static unsigned long previousSerialTime = 0;
-  static unsigned long previousLCDTime = 0;
-
-  unsigned long currentMillis = millis();
-
-  if (currentMillis - previousBlynkTime >= BLYNK_INTERVAL){
-    previousBlynkTime = currentMillis;
-    sendSensor();
-  }
-
-  if (currentMillis - previousSerialTime >= SERIAL_INTERVAL) {
-    previousSerialTime = currentMillis;
-    sendSensor();
-  }
-
-  float temperature = bme.readTemperature();
-  float humidity = bme.readHumidity();
-  float pressure = bme.readPressure() / 100.0;
-
-  if (currentMillis - previousLCDTime >= LCD_INTERVAL) {
-    previousLCDTime = currentMillis;
-   slideText("Temperature (C): ", temperature);
-    slideText("Humidity (%): ", humidity);
-    slideText("Pressure (hPa): ", pressure);
-  }
-
   Blynk.run();
   timer.run();
 }
+ 
 void sendSensor() {
   float t = bme.readTemperature();
   float h = bme.readHumidity();
   float ap = bme.readPressure() / 100.0;
-
+ 
   Blynk.virtualWrite(V5, h);
   Blynk.virtualWrite(V6, t);
   Blynk.virtualWrite(V7, ap);
-
+ 
   Serial.print("Temperature: ");
   Serial.print(t);
   Serial.println(" °C");
-  Serial.print("Humidity: " );
+  Serial.print("Humidity: ");
   Serial.print(h);
   Serial.println(" %");
   Serial.print("Pressure: ");
@@ -107,18 +98,79 @@ void sendSensor() {
   Serial.println(" hPa");
   Serial.println(" ");
 }
-  void slideText(String label, float value) 
-{
+ 
+void updateDisplay() {
+  static int slideIndex = 0;
+  float temperature = bme.readTemperature();
+  float humidity = bme.readHumidity();
+  float pressure = bme.readPressure() / 100.0;
+ 
   lcd.clear();
-  lcd.setCursor(0, 0);
-  lcd.print(label);
-  lcd.setCursor(0, 1);
-  lcd.print(value);
-  delay(5000);
-
-  for (int i = 0; i < label.length() + 1; i++) 
-  {
-    lcd.scrollDisplayLeft();
-    delay(200);
+  switch (slideIndex) {
+    case 0:
+      lcd.setCursor(0, 0);
+      lcd.print("Temperature (C)");
+      lcd.setCursor(0, 1);
+      lcd.print(temperature);
+      delay(5000); // Show parameter for 5 seconds
+      break;
+    case 1:
+      lcd.setCursor(0, 0);
+      lcd.print("Humidity (%)");
+      lcd.setCursor(0, 1);
+      lcd.print(humidity);
+      delay(5000); // Show parameter for 5 seconds
+      break;
+    case 2:
+      lcd.setCursor(0, 0);
+      lcd.print("Pressure (hPa)");
+      lcd.setCursor(0, 1);
+      lcd.print(pressure);
+      delay(5000); // Show parameter for 5 seconds
+      break;
+    case 3:
+      updateClockFromNTP(); // Update the clock each time before displaying
+      lcd.setCursor(0, 0);
+      lcd.print("Time:");
+      lcd.setCursor(0, 1);
+      lcd.print(getFormattedTime());
+      delay(5000); // Show parameter for 5 seconds
+      break;
   }
- }
+  slideIndex = (slideIndex + 1) % 4; // Cycle through the 4 slides
+  delay(3000); // Slide transition duration of 3 seconds
+}
+ 
+void checkWeatherWarning() {
+  float pressure = bme.readPressure() / 100.0;
+  static float previousPressure = pressure;
+  float pressureDrop = previousPressure - pressure;
+  previousPressure = pressure;
+ 
+  if (pressureDrop > 3.0) { // Adjust the threshold as needed
+    Serial.println("Warning: Rapid pressure drop detected! Potential bad weather.");
+    Blynk.logEvent("pressure_drop_warning", "Rapid pressure drop detected! Potential bad weather.");
+  }
+}
+ 
+void updateClockFromNTP() {
+  timeClient.update();
+  unsigned long epochTime = timeClient.getEpochTime();
+  currentTime = epochTime % 86400; // seconds since midnight
+}
+ 
+void incrementTime() {
+  currentTime++;
+  if (currentTime >= 86400) { // One day in seconds
+    updateClockFromNTP(); // Update from NTP at midnight
+  }
+}
+ 
+String getFormattedTime() {
+  unsigned long hours = currentTime / 3600;
+  unsigned long minutes = (currentTime % 3600) / 60;
+ 
+  char timeString[9];
+  snprintf(timeString, sizeof(timeString), "%02lu:%02lu", hours, minutes);
+  return String(timeString);
+}
