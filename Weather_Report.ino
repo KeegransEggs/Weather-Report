@@ -1,8 +1,8 @@
 //==============Blynk Definition==============
 #define BLYNK_PRINT Serial
-#define BLYNK_TEMPLATE_ID "TMPL4E5hG8al3"
-#define BLYNK_TEMPLATE_NAME "temp hum data"
-#define BLYNK_AUTH_TOKEN "1BZVil77wMbp60U2J5QUff9Lo8_Xgc2k"
+#define BLYNK_TEMPLATE_ID "Your template ID"
+#define BLYNK_TEMPLATE_NAME "Your template name"
+#define BLYNK_AUTH_TOKEN "Your authorization token"
 //=================Libraries===================
 #include <WiFi.h>
 #include <Adafruit_BME280.h>
@@ -18,9 +18,9 @@ LCD_I2C lcd(0x27, 16, 2);
 Adafruit_BME280 bme;
 #define BME280_I2C_ADDRESS 0x77
 //====================WIFI=====================
-const char* ssid     = "Na Tinki Tamagochito";
-const char* password = "244466666";
-const char* auth     = "1BZVil77wMbp60U2J5QUff9Lo8_Xgc2k";
+const char* ssid     = "Your WiFi name";
+const char* password = "Your WiFi password";
+const char* auth     = "Your authorization token";
 //===================Interval==================
 const unsigned long BLYNK_INTERVAL = 1000;
 const unsigned long SERIAL_INTERVAL = 10000;
